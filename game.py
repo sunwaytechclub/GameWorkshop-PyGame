@@ -1,6 +1,8 @@
-import sys
+import math
 import pygame
 from pygame.locals import *
+import random
+import sys
 
 size = width, height = 800, 600
 black = (0, 0, 0)
@@ -17,6 +19,12 @@ background_img.set_colorkey(black)
 background_rect = background_img.get_rect()
 player_img = pygame.image.load("assets/player.png").convert()
 
+bullet_sprite_sheet = pygame.image.load("assets/bullet.png")
+bullet_img_list = []
+for x in range(0, 16):
+    for y in range(2, 4):
+        bullet_img_list.append(bullet_sprite_sheet.subsurface(x * 16, y * 16, 16, 16))
+
 
 class Player(pygame.sprite.Sprite):
 
@@ -28,7 +36,7 @@ class Player(pygame.sprite.Sprite):
         self.radius = 20
         self.rect.centerx = width / 2
         self.rect.centery = height / 2
-        self.ms = 150
+        self.ms = 200
         self.hp = 100
 
     def update(self, delta):
@@ -44,8 +52,49 @@ class Player(pygame.sprite.Sprite):
             self.rect.centerx += self.ms * delta
 
 
+class Bullet(pygame.sprite.Sprite):
+
+    def __init__(self, x, y, targetx, targety):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = bullet_img_list[random.randrange(0, len(bullet_img_list))]
+        self.image.set_colorkey(black)
+        self.rect = self.image.get_rect()
+        self.radius = 4
+        self.rect.centerx = x
+        self.rect.centery = y
+        self.ms = 400
+        self.originx = x
+        self.originy = y
+        self.targetx = targetx
+        self.targety = targety
+        self.distTravelled = 0
+        self.alive = True
+
+    def update(self, delta):
+        self.distTravelled += self.ms * delta
+        if self.distTravelled > 500:
+            self.alive = False
+            return
+
+        try:
+            self.rect.centerx -= (self.dx() / self.dist() * self.ms) * delta
+            self.rect.centery -= (self.dy() / self.dist() * self.ms) * delta
+        except:
+            self.alive = False
+
+    def dx(self):
+        return self.originx - self.targetx
+
+    def dy(self):
+        return self.originy - self.targety
+
+    def dist(self):
+        return math.sqrt(self.dx() * self.dx() + self.dy() * self.dy())
+
+
 all_sprites = pygame.sprite.Group()
 player = Player()
+bullet_list = []
 all_sprites.add(player)
 
 while True:
@@ -54,8 +103,23 @@ while True:
     deltaTime = (time - lastTickTime) / 1000.0
     lastTickTime = time
 
-    # all_sprites.update()
-    player.update(delta=deltaTime)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            sys.exit()
+
+    mousex, mousey = pygame.mouse.get_pos()
+    key = pygame.key.get_pressed()
+    if key[pygame.K_SPACE]:
+        bullet = Bullet(player.rect.centerx, player.rect.centery, mousex, mousey)
+        bullet_list.append(bullet)
+        all_sprites.add(bullet)
+
+    all_sprites.update(deltaTime)
+
+    for bullet in bullet_list:
+        if not bullet.alive:
+            all_sprites.remove(bullet)
+            bullet_list.remove(bullet)
 
     screen.fill(black)
     screen.blit(background_img, background_rect)
@@ -63,4 +127,3 @@ while True:
     all_sprites.draw(screen)
 
     pygame.display.flip()
-    pygame.event.pump()
