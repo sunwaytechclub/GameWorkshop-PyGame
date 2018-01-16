@@ -6,6 +6,8 @@ import sys
 
 size = width, height = 800, 600
 black = (0, 0, 0)
+white = (255, 255, 255)
+red = (255, 0, 0)
 lastTickTime = 0
 fps = 30
 
@@ -13,6 +15,8 @@ pygame.init()
 screen = pygame.display.set_mode(size)
 pygame.display.set_caption("Shooting Game")
 clock = pygame.time.Clock()
+
+font_name = pygame.font.match_font('arial')
 
 background_img = pygame.image.load("assets/background.png").convert()
 background_img.set_colorkey(black)
@@ -35,6 +39,23 @@ for mob in range(1, 4):
     mob_sprite_sheet_list.append(mob_img_list)
 
 
+def draw_text(screen, text, color, size, x, y):
+    font = pygame.font.Font(font_name, size)
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect()
+    text_rect.centerx = x
+    text_rect.centery = y
+    screen.blit(text_surface, text_rect)
+
+
+def draw_bar(screen, current_val, max_val, outline_color, fill_color, width, height, outline, x, y):
+    fill = (current_val / max_val) * width
+    outline_rect = pygame.Rect(x, y, width, height)
+    fill_rect = pygame.Rect(x, y, fill, height)
+    pygame.draw.rect(screen, fill_color, fill_rect)
+    pygame.draw.rect(screen, outline_color, outline_rect, 2)
+
+
 class Player(pygame.sprite.Sprite):
 
     def __init__(self):
@@ -45,7 +66,7 @@ class Player(pygame.sprite.Sprite):
         self.radius = 20
         self.rect.centerx = width / 2
         self.rect.centery = height / 2
-        self.ms = 200
+        self.ms = 250
         self.hp = 100
 
     def update(self, delta):
@@ -78,7 +99,7 @@ class Bullet(pygame.sprite.Sprite):
         self.targety = targety
         self.distTravelled = 0
         self.alive = True
-        self.dmg = 10
+        self.dmg = 5
 
     def update(self, delta):
         self.distTravelled += self.ms * delta
@@ -113,7 +134,7 @@ class Mob(pygame.sprite.Sprite):
         self.radius = 4
         self.rect.centerx = random.randrange(0, width)
         self.rect.centery = random.randrange(0, height)
-        self.ms = 200
+        self.ms = 150
         self.alive = True
         self.hp = 100
         self.dmg = 10
@@ -135,9 +156,9 @@ class Mob(pygame.sprite.Sprite):
             self.image = self.image_list[0]
 
 
-player_sprite = pygame.sprite.Group()
+all_sprites = pygame.sprite.Group()
 player = Player()
-player_sprite.add(player)
+all_sprites.add(player)
 bullet_list = pygame.sprite.Group()
 mob_list = pygame.sprite.Group()
 spawn_delay = 2
@@ -156,44 +177,50 @@ while True:
     key = pygame.key.get_pressed()
     if key[pygame.K_SPACE]:
         bullet = Bullet(player.rect.centerx, player.rect.centery, mousex, mousey)
+        all_sprites.add(bullet)
         bullet_list.add(bullet)
 
     spawn_delay -= deltaTime
     if spawn_delay < 0:
         spawn_delay = 2
         mob = Mob()
+        all_sprites.add(mob)
         mob_list.add(mob)
 
-    player.update(deltaTime)
-    bullet_list.update(deltaTime)
-    mob_list.update(deltaTime)
+    all_sprites.update(deltaTime)
 
     for mob in mob_list:
-        bullet_hit = pygame.sprite.spritecollide(mob, bullet_list, True)
+        bullet_hit = pygame.sprite.spritecollide(mob, bullet_list, False)
         for bullet in bullet_hit:
-            mob.hp -= bullet.dmg
-            if mob.hp < 0:
-                mob.alive = False
-                break
+            if bullet.alive:
+                bullet.alive = False
+                mob.hp -= bullet.dmg
+                if mob.hp <= 0:
+                    mob.alive = False
+                    break
 
-    mob_hit = pygame.sprite.spritecollide(player, mob_list, True)
+    mob_hit = pygame.sprite.spritecollide(player, mob_list, False)
     for mob in mob_hit:
+        mob.alive = False
         player.hp -= mob.dmg
-        print(player.hp)
 
     for bullet in bullet_list:
         if not bullet.alive:
+            all_sprites.remove(bullet)
             bullet_list.remove(bullet)
 
     for mob in mob_list:
         if not mob.alive:
+            all_sprites.remove(mob)
             mob_list.remove(mob)
 
     screen.fill(black)
     screen.blit(background_img, background_rect)
 
-    player_sprite.draw(screen)
-    bullet_list.draw(screen)
-    mob_list.draw(screen)
+    all_sprites.draw(screen)
+
+    draw_text(screen, "HP: {!s}".format(player.hp), white, 30, 40, 10)
+    for mob in mob_list:
+        draw_bar(screen, mob.hp, 100, white, red, mob.rect.width, 5, 1, mob.rect.left, mob.rect.top)
 
     pygame.display.flip()
