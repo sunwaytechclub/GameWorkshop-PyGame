@@ -78,7 +78,7 @@ class Bullet(pygame.sprite.Sprite):
         self.targety = targety
         self.distTravelled = 0
         self.alive = True
-        self.dmg = 20
+        self.dmg = 10
 
     def update(self, delta):
         self.distTravelled += self.ms * delta
@@ -113,7 +113,7 @@ class Mob(pygame.sprite.Sprite):
         self.radius = 4
         self.rect.centerx = random.randrange(0, width)
         self.rect.centery = random.randrange(0, height)
-        self.ms = 280
+        self.ms = 200
         self.alive = True
         self.hp = 100
         self.dmg = 10
@@ -135,11 +135,11 @@ class Mob(pygame.sprite.Sprite):
             self.image = self.image_list[0]
 
 
-all_sprites = pygame.sprite.Group()
+player_sprite = pygame.sprite.Group()
 player = Player()
-all_sprites.add(player)
-bullet_list = []
-mob_list = []
+player_sprite.add(player)
+bullet_list = pygame.sprite.Group()
+mob_list = pygame.sprite.Group()
 spawn_delay = 2
 
 while True:
@@ -156,31 +156,44 @@ while True:
     key = pygame.key.get_pressed()
     if key[pygame.K_SPACE]:
         bullet = Bullet(player.rect.centerx, player.rect.centery, mousex, mousey)
-        bullet_list.append(bullet)
-        all_sprites.add(bullet)
+        bullet_list.add(bullet)
 
     spawn_delay -= deltaTime
     if spawn_delay < 0:
         spawn_delay = 2
         mob = Mob()
-        mob_list.append(mob)
-        all_sprites.add(mob)
+        mob_list.add(mob)
 
-    all_sprites.update(deltaTime)
+    player.update(deltaTime)
+    bullet_list.update(deltaTime)
+    mob_list.update(deltaTime)
+
+    for mob in mob_list:
+        bullet_hit = pygame.sprite.spritecollide(mob, bullet_list, True)
+        for bullet in bullet_hit:
+            mob.hp -= bullet.dmg
+            if mob.hp < 0:
+                mob.alive = False
+                break
+
+    mob_hit = pygame.sprite.spritecollide(player, mob_list, True)
+    for mob in mob_hit:
+        player.hp -= mob.dmg
+        print(player.hp)
 
     for bullet in bullet_list:
         if not bullet.alive:
-            all_sprites.remove(bullet)
             bullet_list.remove(bullet)
 
     for mob in mob_list:
         if not mob.alive:
-            all_sprites.remove(mob)
             mob_list.remove(mob)
 
     screen.fill(black)
     screen.blit(background_img, background_rect)
 
-    all_sprites.draw(screen)
+    player_sprite.draw(screen)
+    bullet_list.draw(screen)
+    mob_list.draw(screen)
 
     pygame.display.flip()
