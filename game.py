@@ -8,8 +8,6 @@ size = width, height = 800, 600
 black = (0, 0, 0)
 white = (255, 255, 255)
 red = (255, 0, 0)
-lastTickTime = 0
-fps = 30
 
 pygame.init()
 screen = pygame.display.set_mode(size)
@@ -48,12 +46,12 @@ def draw_text(screen, text, color, size, x, y):
     screen.blit(text_surface, text_rect)
 
 
-def draw_bar(screen, current_val, max_val, outline_color, fill_color, width, height, outline, x, y):
-    fill = (current_val / max_val) * width
-    outline_rect = pygame.Rect(x, y, width, height)
-    fill_rect = pygame.Rect(x, y, fill, height)
+def draw_bar(screen, current_val, max_val, outline_color, fill_color, bar_width, bar_height, outline, x, y):
+    fill = (current_val / max_val) * bar_width
+    outline_rect = pygame.Rect(x, y, bar_width, bar_height)
+    fill_rect = pygame.Rect(x, y, fill, bar_height)
     pygame.draw.rect(screen, fill_color, fill_rect)
-    pygame.draw.rect(screen, outline_color, outline_rect, 2)
+    pygame.draw.rect(screen, outline_color, outline_rect, outline)
 
 
 class Player(pygame.sprite.Sprite):
@@ -102,25 +100,19 @@ class Bullet(pygame.sprite.Sprite):
         self.dmg = 5
 
     def update(self, delta):
+        dx = self.originx - self.targetx
+        dy = self.originy - self.targety
+        dist = math.sqrt(dx * dx + dy * dy)
         self.distTravelled += self.ms * delta
         if self.distTravelled > 500:
             self.alive = False
             return
 
         try:
-            self.rect.centerx -= (self.dx() / self.dist() * self.ms) * delta
-            self.rect.centery -= (self.dy() / self.dist() * self.ms) * delta
+            self.rect.centerx -= (dx / dist * self.ms) * delta
+            self.rect.centery -= (dy / dist * self.ms) * delta
         except:
             self.alive = False
-
-    def dx(self):
-        return self.originx - self.targetx
-
-    def dy(self):
-        return self.originy - self.targety
-
-    def dist(self):
-        return math.sqrt(self.dx() * self.dx() + self.dy() * self.dy())
 
 
 class Mob(pygame.sprite.Sprite):
@@ -141,9 +133,9 @@ class Mob(pygame.sprite.Sprite):
         self.frametime = 0
         self.framecycle = 2
 
-    def update(self, delta):
-        dx = player.rect.centerx - self.rect.centerx
-        dy = player.rect.centery - self.rect.centery
+    def update(self, delta, x, y):
+        dx = x - self.rect.centerx
+        dy = y - self.rect.centery
         dist = math.sqrt(dx * dx + dy * dy)
 
         self.rect.centerx += (dx / dist * self.ms) * delta
@@ -156,71 +148,131 @@ class Mob(pygame.sprite.Sprite):
             self.image = self.image_list[0]
 
 
-all_sprites = pygame.sprite.Group()
-player = Player()
-all_sprites.add(player)
-bullet_list = pygame.sprite.Group()
-mob_list = pygame.sprite.Group()
-spawn_delay = 2
+def main_screen():
+    start_game = False
+
+    while not start_game:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
+                elif event.key == pygame.K_SPACE:
+                    start_game = True
+
+        screen.fill(black)
+        screen.blit(background_img, background_rect)
+
+        draw_text(screen, "Game Workshop", white, 100, width / 2, height / 2 - 50)
+        draw_text(screen, "Press SPACE to start", white, 30, width / 2, (height / 2))
+        draw_text(screen, "Press ESC to quit", white, 30, width / 2, (height / 2) + 30)
+
+        pygame.display.flip()
+
+
+def game():
+    lastTickTime = 0
+    fps = 30
+
+    player_sprite = pygame.sprite.Group()
+    player = Player()
+    player_sprite.add(player)
+    bullet_list = pygame.sprite.Group()
+    mob_list = pygame.sprite.Group()
+    spawn_delay = 2
+    end_game = False
+
+    while not end_game:
+        clock.tick(fps)
+        time = pygame.time.get_ticks()
+        deltaTime = (time - lastTickTime) / 1000.0
+        lastTickTime = time
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+
+        mousex, mousey = pygame.mouse.get_pos()
+        key = pygame.key.get_pressed()
+        if key[pygame.K_SPACE]:
+            bullet = Bullet(player.rect.centerx, player.rect.centery, mousex, mousey)
+            bullet_list.add(bullet)
+
+        spawn_delay -= deltaTime
+        if spawn_delay < 0:
+            spawn_delay = 2
+            mob = Mob()
+            mob_list.add(mob)
+
+        player_sprite.update(deltaTime)
+        bullet_list.update(deltaTime)
+        mob_list.update(deltaTime, player.rect.centerx, player.rect.centery)
+
+        for mob in mob_list:
+            bullet_hit = pygame.sprite.spritecollide(mob, bullet_list, False)
+            for bullet in bullet_hit:
+                if bullet.alive:
+                    bullet.alive = False
+                    mob.hp -= bullet.dmg
+                    if mob.hp <= 0:
+                        mob.alive = False
+                        break
+
+        mob_hit = pygame.sprite.spritecollide(player, mob_list, False)
+        for mob in mob_hit:
+            mob.alive = False
+            player.hp -= mob.dmg
+
+        if player.hp <= 0:
+            end_game = True
+
+        for bullet in bullet_list:
+            if not bullet.alive:
+                bullet_list.remove(bullet)
+
+        for mob in mob_list:
+            if not mob.alive:
+                mob_list.remove(mob)
+
+        screen.fill(black)
+        screen.blit(background_img, background_rect)
+
+        player_sprite.draw(screen)
+        bullet_list.draw(screen)
+        mob_list.draw(screen)
+
+        draw_text(screen, "HP: {!s}".format(player.hp), white, 30, 40, 10)
+        for mob in mob_list:
+            draw_bar(screen, mob.hp, 100, white, red, mob.rect.width, 6, 1, mob.rect.left, mob.rect.top)
+
+        pygame.display.flip()
+
+
+def game_over():
+    start_game = False
+
+    while not start_game:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
+                elif event.key == pygame.K_SPACE:
+                    start_game = True
+
+        screen.fill(black)
+        screen.blit(background_img, background_rect)
+
+        draw_text(screen, "GAME OVER", red, 100, width / 2, height / 2)
+        draw_text(screen, "Press SPACE to continue", red, 30, width / 2, (height / 2) + 50)
+        draw_text(screen, "Press ESC to quit", red, 30, width / 2, (height / 2) + 80)
+
+        pygame.display.flip()
+
 
 while True:
-    clock.tick(fps)
-    time = pygame.time.get_ticks()
-    deltaTime = (time - lastTickTime) / 1000.0
-    lastTickTime = time
-
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            sys.exit()
-
-    mousex, mousey = pygame.mouse.get_pos()
-    key = pygame.key.get_pressed()
-    if key[pygame.K_SPACE]:
-        bullet = Bullet(player.rect.centerx, player.rect.centery, mousex, mousey)
-        all_sprites.add(bullet)
-        bullet_list.add(bullet)
-
-    spawn_delay -= deltaTime
-    if spawn_delay < 0:
-        spawn_delay = 2
-        mob = Mob()
-        all_sprites.add(mob)
-        mob_list.add(mob)
-
-    all_sprites.update(deltaTime)
-
-    for mob in mob_list:
-        bullet_hit = pygame.sprite.spritecollide(mob, bullet_list, False)
-        for bullet in bullet_hit:
-            if bullet.alive:
-                bullet.alive = False
-                mob.hp -= bullet.dmg
-                if mob.hp <= 0:
-                    mob.alive = False
-                    break
-
-    mob_hit = pygame.sprite.spritecollide(player, mob_list, False)
-    for mob in mob_hit:
-        mob.alive = False
-        player.hp -= mob.dmg
-
-    for bullet in bullet_list:
-        if not bullet.alive:
-            all_sprites.remove(bullet)
-            bullet_list.remove(bullet)
-
-    for mob in mob_list:
-        if not mob.alive:
-            all_sprites.remove(mob)
-            mob_list.remove(mob)
-
-    screen.fill(black)
-    screen.blit(background_img, background_rect)
-
-    all_sprites.draw(screen)
-
-    draw_text(screen, "HP: {!s}".format(player.hp), white, 30, 40, 10)
-    for mob in mob_list:
-        draw_bar(screen, mob.hp, 100, white, red, mob.rect.width, 5, 1, mob.rect.left, mob.rect.top)
-
-    pygame.display.flip()
+    main_screen()
+    game()
+    game_over()
