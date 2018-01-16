@@ -25,6 +25,15 @@ for x in range(0, 16):
     for y in range(2, 4):
         bullet_img_list.append(bullet_sprite_sheet.subsurface(x * 16, y * 16, 16, 16))
 
+mob_sprite_sheet_list = []
+for mob in range(1, 4):
+    mob_sprite_sheet = pygame.image.load("assets/mob{}.png".format(mob))
+    mob_img_list = []
+    for x in range(0, 8):
+        for y in range(0, 3):
+            mob_img_list.append(mob_sprite_sheet.subsurface(x * 32, y * 51, 32, 51))
+    mob_sprite_sheet_list.append(mob_img_list)
+
 
 class Player(pygame.sprite.Sprite):
 
@@ -69,6 +78,7 @@ class Bullet(pygame.sprite.Sprite):
         self.targety = targety
         self.distTravelled = 0
         self.alive = True
+        self.dmg = 20
 
     def update(self, delta):
         self.distTravelled += self.ms * delta
@@ -92,10 +102,45 @@ class Bullet(pygame.sprite.Sprite):
         return math.sqrt(self.dx() * self.dx() + self.dy() * self.dy())
 
 
+class Mob(pygame.sprite.Sprite):
+
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image_list = mob_sprite_sheet_list[random.randrange(0, len(mob_sprite_sheet_list))]
+        self.image = self.image_list[0]
+        self.image.set_colorkey(black)
+        self.rect = self.image.get_rect()
+        self.radius = 4
+        self.rect.centerx = random.randrange(0, width)
+        self.rect.centery = random.randrange(0, height)
+        self.ms = 280
+        self.alive = True
+        self.hp = 100
+        self.dmg = 10
+        self.frametime = 0
+        self.framecycle = 2
+
+    def update(self, delta):
+        dx = player.rect.centerx - self.rect.centerx
+        dy = player.rect.centery - self.rect.centery
+        dist = math.sqrt(dx * dx + dy * dy)
+
+        self.rect.centerx += (dx / dist * self.ms) * delta
+        self.rect.centery += (dy / dist * self.ms) * delta
+
+        self.frametime = (self.frametime + delta) % self.framecycle
+        try:
+            self.image = self.image_list[int(self.frametime / (self.framecycle / len(self.image_list)))]
+        except:
+            self.image = self.image_list[0]
+
+
 all_sprites = pygame.sprite.Group()
 player = Player()
-bullet_list = []
 all_sprites.add(player)
+bullet_list = []
+mob_list = []
+spawn_delay = 2
 
 while True:
     clock.tick(fps)
@@ -114,12 +159,24 @@ while True:
         bullet_list.append(bullet)
         all_sprites.add(bullet)
 
+    spawn_delay -= deltaTime
+    if spawn_delay < 0:
+        spawn_delay = 2
+        mob = Mob()
+        mob_list.append(mob)
+        all_sprites.add(mob)
+
     all_sprites.update(deltaTime)
 
     for bullet in bullet_list:
         if not bullet.alive:
             all_sprites.remove(bullet)
             bullet_list.remove(bullet)
+
+    for mob in mob_list:
+        if not mob.alive:
+            all_sprites.remove(mob)
+            mob_list.remove(mob)
 
     screen.fill(black)
     screen.blit(background_img, background_rect)
