@@ -2,11 +2,14 @@ import math
 import pygame
 import random
 import sys
+import os.path
 
 size = width, height = 800, 600
 black = (0, 0, 0)
 white = (255, 255, 255)
 red = (255, 0, 0)
+
+score = 0
 
 pygame.init()
 screen = pygame.display.set_mode(size)
@@ -52,6 +55,27 @@ def draw_bar(screen, current_val, max_val, outline_color, fill_color, bar_width,
     pygame.draw.rect(screen, fill_color, fill_rect)
     pygame.draw.rect(screen, outline_color, outline_rect, outline)
 
+def get_high_score():
+    if not os.path.isfile("highscore"):
+        with open("highscore", "w") as f:
+            f.write("0")
+        return 0
+    
+    with open("highscore", "r") as f:
+        s = f.read()
+    return s
+
+def save_high_score(newScore):
+    oldScore = 0
+    with open("highscore", "r") as f:
+        oldScore = int(f.read())
+    
+    if newScore:
+        print("New")
+        
+    with open("highscore", "w") as f:
+        if newScore > oldScore:
+            f.write(str(newScore))
 
 class Player(pygame.sprite.Sprite):
 
@@ -131,7 +155,8 @@ class Mob(pygame.sprite.Sprite):
         self.dmg = 10
         self.frametime = 0
         self.framecycle = 2
-
+    
+    
     def update(self, delta, x, y):
         dx = x - self.rect.centerx
         dy = y - self.rect.centery
@@ -173,6 +198,8 @@ def main_screen():
 def game():
     lastTickTime = 0
     fps = 30
+    global score
+    score = 0
 
     player_sprite = pygame.sprite.Group()
     player = Player()
@@ -181,6 +208,8 @@ def game():
     mob_list = pygame.sprite.Group()
     spawn_delay = 2
     end_game = False
+    
+    highscore = get_high_score()
 
     while not end_game:
         clock.tick(fps)
@@ -200,7 +229,7 @@ def game():
 
         spawn_delay -= deltaTime
         if spawn_delay < 0:
-            spawn_delay = 2
+            spawn_delay = 2 - (score * 0.05)
             mob = Mob()
             mob_list.add(mob)
 
@@ -233,6 +262,7 @@ def game():
         for mob in mob_list:
             if not mob.alive:
                 mob_list.remove(mob)
+                score += 1
 
         screen.fill(black)
         screen.blit(background_img, background_rect)
@@ -242,15 +272,19 @@ def game():
         mob_list.draw(screen)
 
         draw_text(screen, "HP: {!s}".format(player.hp), white, 30, 40, 10)
+        draw_text(screen, "Score: {!s}".format(score), white, 30, 40, 35)
+        draw_text(screen, "Highscore: {!s}".format(highscore), white, 30, 40, 60)
         for mob in mob_list:
             draw_bar(screen, mob.hp, 100, white, red, mob.rect.width, 6, 1, mob.rect.left, mob.rect.top)
 
         pygame.display.flip()
 
-
 def game_over():
+    global score
+    print(score)
     start_game = False
-
+    save_high_score(score)
+    
     while not start_game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -269,6 +303,7 @@ def game_over():
         draw_text(screen, "Press ESC to quit", red, 30, width / 2, (height / 2) + 80)
 
         pygame.display.flip()
+
 
 
 while True:
